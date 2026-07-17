@@ -1,59 +1,110 @@
-const {GoogleGenAI} = require("@google/genai")
-const {z} = require("zod")
-const {zodToJsonSchema} = require("zod-to-json-schema")
+const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({
-    apiKey: process.env.GOOGLE_GEMINI_API_KEY
-})
+    apiKey: process.env.GOOGLE_GEMINI_API_KEY,
+});
 
+async function generateInterviewReport({
+    resume,
+    selfDescription,
+    jobDescription,
+}) {
+    const prompt = `
+You are an expert technical interviewer and career coach.
 
-const interviewReportSchema = z.object({
-    matchScore: z.number().describe("A score between 0 and 100 indicating how well the candidate's profile matches the job description"),
-     
-    technicalQuestions: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in interview"),
-        intention: z.string().describe("The intention of the interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Technical questions that can be asked in the interview along with their intention and how to answer them"),
+Analyze the candidate's Resume, Self Description, and Job Description.
 
-    behavioralQuestions:z.array(z.object({
-        question: z.string().describe("The technical question can be asked in interview"),
-        intention: z.string().describe("The intention of the interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Behavioral questions that can be asked in the interview along with their intention and how to answer them"),
+Return ONLY valid JSON.
+Do NOT include markdown.
+Do NOT wrap the JSON inside \`\`\`.
+Do NOT add any explanation before or after the JSON.
 
-    skillGaps: z.array(z.object({
-        skill: z.string().describe("The skill which the candidate is lacking"),
-        severity: z.enum(["low","medium","high"]).describe("The severity of the skill gap i.e how important is it for the candidate to have this skill for the job")
-    })).describe("List of skill gaps  in the candidate's along with their severity"),
+The JSON MUST exactly follow this structure:
 
-    preparationPlan: z.array(z.object({
-        day: z.number().describe("The day number in the preparation plan, starting from 1"),
-        focus: z.string().describe("The main focus of this day in the preparation plan, e.g. data structures, system design, mock interviews etc."),
-        tasks: z.array(z.string().describe("List of tasks to be completed on this day in the preparation plan"))
-    })).describe("A day wise preparation plan for the candidate to follow in order to improve their chances of getting the job")
-
-})
-
-async function generateInterviewReport({resume, selfDescription, jobDescription}) {
-    const prompt = `Generate an interview report for a candidate with the following details:
-    Resume: ${resume}
-    Self Description: ${selfDescription}
-    Job Description: ${jobDescription}
-    `
-
-        const response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: zodToJsonSchema(interviewReportSchema)
-            }
-        })
-
-        //console.log(response.text)
-        return JSON.parse(response.text)
-        
+{
+  "title": "",
+  "matchScore": 0,
+  "technicalQuestions": [
+    {
+      "question": "",
+      "intention": "",
+      "answer": ""
     }
+  ],
+  "behavioralQuestions": [
+    {
+      "question": "",
+      "intention": "",
+      "answer": ""
+    }
+  ],
+  "skillGaps": [
+    {
+      "skill": "",
+      "severity": "low"
+    }
+  ],
+  "preparationPlan": [
+    {
+      "day": 1,
+      "focus": "",
+      "tasks": [
+        ""
+      ]
+    }
+  ]
+}
 
-module.exports = generateInterviewReport
+Instructions:
+
+- title should contain the Job Title. Examples:
+  - "MERN Stack Developer"
+  - "Software Engineer"
+  - "Frontend Developer"
+  - "Java Backend Developer"
+
+- Generate a matchScore between 0 and 100.
+- Generate exactly 10 technical interview questions.
+- Generate exactly 5 behavioral interview questions.
+- Identify exactly 5 skill gaps with severity (low, medium, or high).
+- Generate a detailed 7-day preparation plan.
+
+Candidate Resume:
+${resume}
+
+Candidate Self Description:
+${selfDescription}
+
+Target Job Description:
+${jobDescription}
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+
+        const text = response.candidates[0].content.parts[0].text;
+
+        const cleanedText = text
+            .replace(/```json/g, "")
+            .replace(/```/g, "")
+            .trim();
+
+        const report = JSON.parse(cleanedText);
+
+        // Fallback if Gemini doesn't return title
+        if (!report.title || report.title.trim() === "") {
+            report.title = "Interview Report";
+        }
+
+        return report;
+    } catch (error) {
+        console.error("Gemini Error:");
+        console.error(error);
+        throw error;
+    }
+}
+
+module.exports = generateInterviewReport;
