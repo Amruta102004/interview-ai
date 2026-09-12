@@ -47,21 +47,21 @@ export const useAuth = () => {
         }
     }
 
-    useEffect(()=>{
-
-        const getAndSetUser = async () => {
-            try{
-                const data = await getMe()
-                setUser(data)
-            }
-            catch(err){}finally{  
-            setLoading(false)
-            }
+useEffect(() => {
+    const getAndSetUser = async () => {
+        try {
+            const data = await getMe();
+            setUser(data.user);
+        } catch (error) {
+            console.error("Failed to get user:", error);
+            setUser(null);
+        } finally {
+            setLoading(false);
         }
+    };
 
-        getAndSetUser()
-
-    },[])
+    getAndSetUser();
+}, []);
 
     return {
         user,
